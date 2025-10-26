@@ -18,8 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -110,18 +109,59 @@ class RecipeControllerTest {
         }
 
         @Test
-        void testDeleteRecipe() {
-            throw new UnsupportedOperationException("testDeleteRecipe not implemented");
+        void testDeleteRecipe() throws Exception {
+            int id = recipeIds.getFirst();
+            mockMvc.perform(delete("/api/recipes/" + id))
+                .andExpect(status().isOk());
         }
 
         @Test
-        void testPutRecipe() {
-            throw new UnsupportedOperationException("testPutRecipe not implemented");
+        void testPutRecipe() throws Exception  {
+            ObjectNode json = mapper.createObjectNode();
+            json.put("title", "Cake");
+            json.put("description", "Delicious cake");
+            // Change ingredients to a single string
+            json.put("ingredients", "1 cup of flour, 1 cup of sugar, 3 eggs");
+            json.put("instructions", "Mix and bake");
+            String jsonString = mapper.writeValueAsString(json);
+            int id = recipeIds.getFirst();
+            mockMvc.perform(put("/api/recipes/" + id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(jsonString))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.title").value("Cake"))
+                    .andExpect(jsonPath("$.description").value("Delicious cake"))
+                    .andExpect(jsonPath("$.instructions").value("Mix and bake"))
+                    .andExpect(jsonPath("$.id").isNumber());
         }
 
+        // note to self: PATCH updates only fields provided
         @Test
-        void testPatchRecipe() {
-            throw new UnsupportedOperationException("testPatchRecipe not implemented");
+        void testPatchRecipe() throws Exception {
+            ObjectNode json = mapper.createObjectNode();
+            json.put("title", "Cake");
+            json.put("description", "Delicious cake");
+            json.put("ingredients", "1 cup of flour, 1 cup of sugar, 3 eggs");
+            json.put("instructions", "Mix and bake");
+            String jsonString = mapper.writeValueAsString(json);
+            int id = recipeIds.getFirst();
+            // patch the title
+            ObjectNode patchJson = mapper.createObjectNode();
+            patchJson.put("title", "Updated Cake");
+            patchJson.put("description", "updated delicious cake");
+            patchJson.put("ingredients", "1 cup of flour, 1 cup of sugar, 3 eggs");
+            patchJson.put("instructions", "Mix and bake");
+            String patchJsonString = mapper.writeValueAsString(patchJson);
+
+            mockMvc.perform(put("/api/recipes/" + id)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(patchJsonString))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.title").value("Updated Cake"))
+                            .andExpect(jsonPath("$.description").value("updated delicious cake"))
+                            .andExpect(jsonPath("$.ingredients").value("1 cup of flour, 1 cup of sugar, 3 eggs"))
+                            .andExpect(jsonPath("$.instructions").value("Mix and bake"))
+                            .andExpect(jsonPath("$.id").isNumber());
         }
     }
 
