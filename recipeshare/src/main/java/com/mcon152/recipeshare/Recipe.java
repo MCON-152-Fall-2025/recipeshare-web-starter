@@ -1,5 +1,6 @@
 package com.mcon152.recipeshare;
 
+// MVC - model. SOLID- SRP: Pure date model (no controller or persistence logic).
 public class Recipe {
     private Long id;
     private String title;

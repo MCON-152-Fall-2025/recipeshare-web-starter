@@ -22,6 +22,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 
 @WebMvcTest(RecipeController.class)
 class RecipeControllerTest {
@@ -110,18 +113,49 @@ class RecipeControllerTest {
         }
 
         @Test
-        void testDeleteRecipe() {
-            throw new UnsupportedOperationException("testDeleteRecipe not implemented");
+        void testDeleteRecipe() throws Exception {
+            int id = recipeIds.get(0);
+
+            mockMvc.perform(delete("/api/recipes/" + id))
+                    .andExpect(status().isOk());
         }
 
         @Test
-        void testPutRecipe() {
-            throw new UnsupportedOperationException("testPutRecipe not implemented");
+        void testPutRecipe() throws Exception {
+            int id = recipeIds.get(0);
+
+            String updatedJson = """
+                    {
+                        "title": "Updated Pie",
+                        "description": "New descriptin",
+                        "ingredients": "Apples, Flour, Sugar",
+                        "instructions": "Mix and bake"
+                    }
+                    """;
+
+            mockMvc.perform(put("/api/recipes/" + id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(updatedJson))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.title").value("Updated Pie"))
+                    .andExpect(jsonPath("$.description").value("New descriptin"));
         }
 
         @Test
-        void testPatchRecipe() {
-            throw new UnsupportedOperationException("testPatchRecipe not implemented");
+        void testPatchRecipe() throws Exception {
+            int id = recipeIds.get(0);
+
+            String partialJson = """
+                    {
+                        "description": "Partially updated" 
+                    }
+                    """;
+
+            mockMvc.perform(patch("/api/recipes/" + id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(partialJson))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.description").value("Partially updated"));
         }
     }
 
