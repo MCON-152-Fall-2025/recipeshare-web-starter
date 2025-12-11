@@ -1,96 +1,173 @@
 package com.mcon152.recipeshare.web;
 
 import com.mcon152.recipeshare.Recipe;
+import com.mcon152.recipeshare.service.RecipeFactory;
+import com.mcon152.recipeshare.service.RecipeService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
-import java.util.ArrayList;
+import java.net.URI;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 @RestController
 @RequestMapping("/api/recipes")
 public class RecipeController {
-    private final List<Recipe> recipes = new ArrayList<>();
 
-    private final AtomicLong counter = new AtomicLong();
-    RecipeController() {}
+    private static final Logger logger = LoggerFactory.getLogger(RecipeController.class);
+    private final RecipeService recipeService;
+
+    public RecipeController(RecipeService recipeService) {
+        this.recipeService = recipeService;
+    }
 
     /**
-     * Adds a new recipe to the list.
-     *
-     * @param recipe the recipe to add
-     * @return the added recipe with its assigned ID
+     * Create a new recipe.
      */
     @PostMapping
-    public Recipe addRecipe(@RequestBody Recipe recipe) {
-        recipe.setId(counter.incrementAndGet());
-        recipes.add(recipe);
-        return recipe;
+    public ResponseEntity<Recipe> addRecipe(@RequestBody RecipeRequest recipeRequest) {
+        MDC.put("recipeName", recipeRequest.getTitle());
+        logger.info("Entering controller: POST /api/recipes");
+        logger.debug("Recipe add request summary: name={}, type={}", recipeRequest.getTitle(), recipeRequest.getType());
+
+        try {
+            Recipe toSave = RecipeFactory.createFromRequest(recipeRequest);
+            Recipe saved = recipeService.addRecipe(toSave);
+
+            URI location = ServletUriComponentsBuilder
+                    .fromCurrentRequest()
+                    .path("/{id}")
+                    .buildAndExpand(saved.getId())
+                    .toUri();
+
+            logger.info("Created new recipe with id {}", saved.getId());
+            return ResponseEntity.created(location).body(saved);
+
+        } catch (Exception e) {
+            logger.error("Error creating recipe", e);
+            return ResponseEntity.internalServerError().build();
+
+        } finally {
+            MDC.clear();
+        }
     }
 
     /**
-     * Retrieves all recipes.
-     *
-     * @return a list of all recipes
+     * Retrieve all recipes.
      */
     @GetMapping
-    public List<Recipe> getAllRecipes() {
-        return recipes;
+    public ResponseEntity<List<Recipe>> getAllRecipes() {
+        logger.info("Entering controller: GET /api/recipes");
+
+        List<Recipe> all = recipeService.getAllRecipes();
+        logger.info("Retrieved {} recipes", all == null ? 0 : all.size());
+
+        return ResponseEntity.ok(all);
     }
 
     /**
-     * Retrieves a recipe by its ID.
-     *
-     * @param id the ID of the recipe to retrieve
-     * @return the recipe with the specified ID, or null if not found
+     * Retrieve a recipe by ID.
      */
     @GetMapping("/{id}")
-    public Recipe getRecipeById(@PathVariable long id) {
-        for (Recipe recipe : recipes) {
-            if (recipe.getId() == id) {
-                return recipe;
-            }
+    public ResponseEntity<Recipe> getRecipeById(@PathVariable long id) {
+        logger.info("Entering controller: GET /api/recipes/{}", id);
+
+        var opt = recipeService.getRecipeById(id);
+        if (opt.isPresent()) {
+            logger.info("Found recipe with id {}", id);
+            return ResponseEntity.ok(opt.get());
+        } else {
+            logger.warn("Recipe not found with id {}", id);
+            return ResponseEntity.notFound().build();
         }
-        return null;
     }
 
     /**
-     * Deletes a recipe by its ID.
-     *
-     * @param id the ID of the recipe to delete
-     * @return true if the recipe was deleted, false if not found
+     * Delete a recipe.
      */
     @DeleteMapping("/{id}")
-    public boolean deleteRecipe(@PathVariable long id) {
-        for (int i = 0; i < recipes.size(); i++) {
-            if (recipes.get(i).getId() == id) {
-                recipes.remove(i);
-                return true;
+    public ResponseEntity<Void> deleteRecipe(@PathVariable long id) {
+        MDC.put("recipeName", "DELETE id=" + id);
+        logger.info("Entering controller: DELETE /api/recipes/{}", id);
+
+        try {
+            boolean deleted = recipeService.deleteRecipe(id);
+
+            if (deleted) {
+                logger.info("Deleted recipe with id {}", id);
+                return ResponseEntity.noContent().build();
+            } else {
+                logger.warn("Attempted to delete non-existing recipe with id {}", id);
+                return ResponseEntity.notFound().build();
             }
+
+        } catch (Exception e) {
+            logger.error("Error deleting recipe with id {}", id, e);
+            return ResponseEntity.internalServerError().build();
+
+        } finally {
+            MDC.clear();
         }
-        return false;
-    }
-    /**
-     * Updates an existing recipe by its ID.
-     *
-     * @param id the ID of the recipe to update
-     * @param updatedRecipe the updated recipe data
-     * @return the updated recipe, or null if not found
-     */
-    @PutMapping("/{id}")
-    public Recipe updateRecipe(@PathVariable long id, @RequestBody Recipe updatedRecipe) {
-        throw new UnsupportedOperationException("Update recipe not implemented");
     }
 
     /**
-     * Partially updates an existing recipe by its ID.
-     *
-     * @param id the ID of the recipe to update
-     * @param partialRecipe the partial recipe data to update
-     * @return the updated recipe, or null if not found
+     * Replace a recipe (full update).
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<Recipe> updateRecipe(@PathVariable long id,
+                                               @RequestBody RecipeRequest updatedRequest) {
+
+        MDC.put("recipeName", updatedRequest.getTitle());
+        logger.info("Entering controller: PUT /api/recipes/{}", id);
+        logger.debug("Recipe update request summary: name={}, type={}",
+                updatedRequest.getTitle(), updatedRequest.getType());
+
+        try {
+            Recipe updatedRecipe = RecipeFactory.createFromRequest(updatedRequest);
+            var opt = recipeService.updateRecipe(id, updatedRecipe);
+
+            if (opt.isPresent()) {
+                logger.info("Updated recipe with id {}", id);
+                return ResponseEntity.ok(opt.get());
+            } else {
+                logger.warn("Recipe not found for update with id {}", id);
+                return ResponseEntity.notFound().build();
+            }
+
+        } finally {
+            MDC.clear();
+        }
+    }
+
+    /**
+     * Partial update.
      */
     @PatchMapping("/{id}")
-    public Recipe patchRecipe(@PathVariable long id, @RequestBody Recipe partialRecipe) {
-        throw new UnsupportedOperationException("Update recipe not implemented");
+    public ResponseEntity<Recipe> patchRecipe(@PathVariable long id,
+                                              @RequestBody RecipeRequest partialRequest) {
+
+        MDC.put("recipeName", partialRequest.getTitle());
+        logger.info("Entering controller: PATCH /api/recipes/{}", id);
+        logger.debug("Recipe patch request summary: name={}, type={}",
+                partialRequest.getTitle(), partialRequest.getType());
+
+        try {
+            Recipe partialRecipe = RecipeFactory.createFromRequest(partialRequest);
+            var opt = recipeService.patchRecipe(id, partialRecipe);
+
+            if (opt.isPresent()) {
+                logger.info("Patched recipe with id {}", id);
+                return ResponseEntity.ok(opt.get());
+            } else {
+                logger.warn("Recipe not found for patch with id {}", id);
+                return ResponseEntity.notFound().build();
+            }
+
+        } finally {
+            MDC.clear();
+        }
     }
 }
